@@ -2,7 +2,6 @@
 
 import math
 import sys
-
 from PyQt5 import uic, QtWidgets, QtCore
 from PyQt5.QtGui import QIcon
 
@@ -11,7 +10,7 @@ def transformArrayWithHex(array, alphabet):
     new_array = []
     current_hex_number = ''
     for index in range(len(array)):
-        if array[index] in alphabet:
+        if array[index] in alphabet or array[index] == '.':
             current_hex_number += array[index]
         elif current_hex_number != '':
             new_array.append(current_hex_number)
@@ -20,7 +19,6 @@ def transformArrayWithHex(array, alphabet):
         else:
             new_array.append(array[index])
 
-    print(new_array)
     if current_hex_number != '':
         new_array.append(current_hex_number)
     return new_array
@@ -30,6 +28,8 @@ class Converter(object):
     def __init__(self, base):
         self.currentBase = base
         self.alphabet = "0123456789ABCDEF"
+        self.romanAlphabet = "IVXLCDMGH"
+        self.isRoman = False
 
     def setBase(self, base):
         self.currentBase = base
@@ -47,14 +47,103 @@ class Converter(object):
     def _contains_only_alphabet_symbol(self, string):
         return any(char in self.alphabet for char in string)
 
+    def _contains_only_roman_symbol(self, string):
+        return any(char in self.romanAlphabet for char in string)
+
     def convert_array_of_num_to_some_base(self, array, base):
         new_array = []
-        for index in transformArrayWithHex(array, self.alphabet):
-            if self._contains_only_alphabet_symbol(index):
-                new_array.append(self.convert_base(index, base, self.currentBase))
+        if self.isRoman:
+            self.isRoman = False
+            self.currentBase = 10
+            local_array = []
+            for el in transformArrayWithHex(array, self.romanAlphabet):
+                if self._contains_only_roman_symbol(el):
+                    local_array.append(str(self.convert_from_roman_to_10base(el)))
+                else:
+                    local_array.append(el)
+            array = local_array
+
+        if base == 'roman':
+            base = 10
+            self.isRoman = True
+
+        for el in transformArrayWithHex(array, self.alphabet):
+            if self._contains_only_alphabet_symbol(el):
+                new_array.append(self.convert_base(el, base, self.currentBase))
             else:
-                new_array.append(index)
+                new_array.append(el)
+
+        if self.isRoman:
+            local_array = []
+            for el in new_array:
+                if self._contains_only_alphabet_symbol(el):
+                    print(el)
+                    local_array.append(self.convert_to_roman(int(el)))
+            new_array = local_array[::-1]
         return new_array
+
+    def convert_to_roman(self, number):
+        romans_dict = {
+            1: "I",
+            5: "V",
+            10: "X",
+            50: "L",
+            100: "C",
+            500: "D",
+            1000: "M",
+            5000: "G",
+            10000: "H"
+        }
+        div = 1
+        while number >= div:
+            div *= 10
+
+        div /= 10
+
+        res = ""
+        while number:
+            last_num = int(number / div)
+            if last_num <= 3:
+                res += (romans_dict[div] * last_num)
+            elif last_num == 4:
+                res += (romans_dict[div] +
+                        romans_dict[div * 5])
+            elif 5 <= last_num <= 8:
+                res += (romans_dict[div * 5] +
+                        (romans_dict[div] * (last_num - 5)))
+            elif last_num == 9:
+                res += (romans_dict[div] +
+                        romans_dict[div * 10])
+
+            number = math.floor(number % div)
+            div /= 10
+        return res
+
+    def convert_from_roman_to_10base(self, string):
+        def value(r):
+            d = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000, "G": 5000, "H": 10000}
+            if r in d:
+                return d[r]
+            return -1
+
+        res = 0
+        i = 0
+
+        while i < len(string):
+            s1 = value(string[i])
+            if i + 1 < len(string):
+                s2 = value(string[i + 1])
+                if s1 >= s2:
+                    res = res + s1
+                    i = i + 1
+                else:
+                    res = res + s2 - s1
+                    i = i + 2
+            else:
+                res = res + s1
+                i = i + 1
+
+        return res
 
 
 class CalculatorUI(QtWidgets.QMainWindow):
@@ -197,6 +286,8 @@ class CalculatorUI(QtWidgets.QMainWindow):
 
         self.numSystemSlider.valueChanged.connect(self.changeNumSystemLabel)
 
+        self.romanButton.clicked.connect(self.romanButtonListener)
+
         self.show()
 
     def EC(self):
@@ -217,6 +308,10 @@ class CalculatorUI(QtWidgets.QMainWindow):
         self.solution = self.converter.convert_array_of_num_to_some_base(self.solution, base)
 
         self.converter.setBase(base)
+        self.lineEdit.setText("".join(self.solution))
+
+    def romanButtonListener(self):
+        self.solution = self.converter.convert_array_of_num_to_some_base(self.solution, 'roman')
         self.lineEdit.setText("".join(self.solution))
 
 
@@ -257,3 +352,4 @@ if __name__ == "__main__":
         button.clicked.connect(lambda checked, text=button.text(): root.btnPressedNumSystem(text))
 
     app.exec_()
+    
